@@ -1,158 +1,78 @@
-**#read only final_model_p1rich03_surface2d10.ipynb
-**
-## How To Run
+# Expiry-Aware Implied Volatility Imputation for NIFTY Options
 
-Install dependencies:
+**Context & Affiliation**: Finance Club Open Project, IIT Roorkee  
+**Domain**: Quantitative Finance, Derivatives Pricing, Surface Imputation & Time-Series Modeling  
 
+This project resolves missing implied-volatility (IV) values across call and put strikes for NIFTY index options. The final solution combines an iterative multivariate imputer (PowerMICE) with a local 2D time-strike volatility surface smoother.
+
+---
+
+## Performance Summary
+
+- **Best Actual MSE**: `0.0000658973`
+- **Final Model Architecture**:
+  ```text
+  0.90 * PowerMICE(power=1.0, alpha=0.03, rich_features) + 0.10 * Local 2D IV Surface Smoother
+  ```
+
+---
+
+## 1. Problem Statement & Dataset
+The dataset contains timestamped NIFTY option IV observations across 28 call and put strike columns (`NIFTY27JAN26`) alongside spot underlying prices. Option liquidity variations cause missing IV cells across strikes and timestamps, requiring robust surface imputation without lookahead leakage.
+
+- `dataset.csv`: Historical 5-minute option chain timestamps, underlying price, and 28 option IV series.
+
+---
+
+## 2. Key Methodological Findings
+
+### Native-Pattern Masking vs. Random Masking
+Uniform random masking yielded unrealistically optimistic validation errors that failed to generalize. We engineered a native-pattern masking validator: for each row, mask the exact distribution of observed cells that matched empirical missingness patterns.
+
+### Expiry-Day Regimes ($DTE < 1$ vs. $DTE \ge 1$)
+Decomposing IV across log-moneyness revealed sharp regime shifts between expiry-day and non-expiry sessions. Expiry-day observations exhibited steep local skew and curvature, requiring specialized local time-decay constraints.
+
+### PowerMICE Backbone
+PowerMICE implements a transformed iterative ridge imputation scheme:
+- Iteratively models each option strike column conditional on all peer strikes.
+- Integrates row-level market features: underlying spot price, days-to-expiry (DTE), intraday timestamp, and short-term underlying momentum.
+- Applies ridge regularization ($\alpha = 0.03$) to stabilize collinear strike relationships.
+
+### Local 2D Volatility Surface Smoothing
+A kernel-weighted 2D smoother fits nearby observations across both temporal and strike dimensions independently for CE and PE surfaces, with tighter temporal windows on expiry day to handle pin risk.
+
+---
+
+## 3. How To Run
+
+### Environment Setup
 ```bash
 pip install -r requirements.txt
 ```
 
-Run the final model:
-
+### Execute Final Pipeline
 ```bash
 python run_final_model.py
 ```
 
-This creates:
-
+Outputs generated:
 ```text
 outputs/filled_blend_p1rich03_90_surface2d10.csv
 outputs/submission_blend_p1rich03_90_surface2d10.csv
 ```
 
-The notebook version is:
-
+Interactive analysis notebook:
 ```text
 final_model_p1rich03_surface2d10.ipynb
 ```
 
+---
 
-# Expiry-Aware IV Imputation for NIFTY Options
+## 4. Repository Structure & Deliverables
 
-This project fills missing implied-volatility (IV) values in a NIFTY options dataset. The final solution combines a stable multivariate iterative imputer with a small local time-strike surface correction.
-
-Best recorded actual MSE for the selected submission:
-
-```text
-0.0000658973
-```
-
-Final model:
-
-```text
-0.90 * PowerMICE(power=1.0, alpha=0.03, rich_features)
-+ 0.10 * Local 2D IV Surface Smoother
-```
-
-## Problem
-
-The dataset contains timestamped NIFTY option IV values with missing cells across call and put strikes. The objective is to predict the missing IV values as accurately as possible.
-
-The main file is:
-
-```text
-dataset.csv
-```
-
-It contains:
-
-- `datetime`
-- `underlying_price`
-- 28 option IV columns for `NIFTY27JAN26`
-
-## Key Findings
-
-### 1. Random masking was too optimistic
-
-Uniform random masking gave very low validation errors, but those scores did not transfer well to the actual missing cells. The better validation proxy was native-pattern masking: for each row, mask the same number of observed cells as were originally missing in that row.
-
-### 2. Expiry day mattered
-
-I split the data into:
-
-- `DTE < 1`
-- `DTE >= 1`
-
-The IV versus log-moneyness curve showed that expiry-day rows behave very differently. The non-expiry region was much easier to impute, while expiry-day rows had steeper local IV behavior and dominated the harder errors.
-
-### 3. PowerMICE was the best backbone
-
-PowerMICE is a transformed MICE-style iterative ridge imputer:
-
-- optionally transform IV as `IV^power`
-- iteratively predict each option column from the other option columns
-- include rich row-level features such as underlying price, days-to-expiry, intraday time, expiry flag, and underlying-price movement
-- apply ridge regularization through `alpha`
-
-The best actual-performing backbone used raw IV scale:
-
-```text
-power = 1.0
-alpha = 0.03
-features = rich
-```
-
-### 4. Local 2D smoothing helped as a small correction
-
-The local smoother fits nearby values in both time and strike dimensions, separately for CE and PE. It uses tighter time locality on expiry day.
-
-The smoother alone was unstable, but a small 10% contribution improved the final submission.
-
-## Repository Structure
-
-Recommended core files:
-
-```text
-dataset.csv
-final_model_p1rich03_surface2d10.ipynb
-run_final_model.py
-robust_imputation_search.py
-advanced_imputation_search.py
-leakage_safe_imputation_eval.py
-no_leak_model_search_v2.py
-surface2d_search.py
-requirements.txt
-README.md
-```
-
-
-```
-
-
-It includes:
-
-- loading and preprocessing
-- missingness EDA
-- IV versus log-moneyness graph
-- expiry-day analysis
-- explanation of PowerMICE
-- local 2D smoothing
-- final blend
-- filled CSV generation
-- submission CSV conversion
-
-## Final Output Format
-
-The submission format uses one row per originally missing value:
-
-```text
-id,value
-datetime||column_name,predicted_iv
-```
-
-Example ID:
-
-```text
-07-01-2026 09:15||NIFTY27JAN2625500CE
-```
-
-
-
-
-
-## Additional project materials
-
-- [Expiry-specialist search script](expiry_specialist_search.py)
-- [Imputation work summary](imputation_work_summary.md)
-- [Finclub open project brief](Finclub_Open_Project_2.pdf)
+- `dataset.csv`: Raw option chain dataset.
+- `final_model_p1rich03_surface2d10.ipynb`: End-to-end exploration, missingness EDA, IV surface visualization, and model blend.
+- `run_final_model.py`: Standalone execution script for the final PowerMICE + 2D smoother blend.
+- `robust_imputation_search.py`: Benchmarking script for baseline imputation strategies.
+- `imputation_work_summary.md`: Detailed validation methodology notes.
+- `Finclub_Open_Project_2.pdf`: Original problem statement and project guidelines.
